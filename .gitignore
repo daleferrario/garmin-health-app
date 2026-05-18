@@ -1,0 +1,23 @@
+# Credentials and secrets — never commit these
+.env
+.garmin_tokens/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Database
+instance/
+
+# Collector output (raw API responses, may contain health data)
+collector_output/
+
+# OS
+.DS_Store
+Thumbs.db
