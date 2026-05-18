@@ -36,27 +36,28 @@ def get_mfa():
 
 
 def build_client():
-    from garminconnect import Garmin, GarminConnectAuthenticationError
+    from garminconnect import (
+        Garmin,
+        GarminConnectAuthenticationError,
+        GarminConnectTooManyRequestsError,
+    )
 
     client = Garmin(email=EMAIL, password=PASSWORD, prompt_mfa=get_mfa)
 
-    if TOKEN_DIR.exists():
-        try:
-            client.login(tokenstore=str(TOKEN_DIR))
-            print(f"Authenticated using saved tokens ({TOKEN_DIR})")
-            return client
-        except Exception:
-            print("Saved tokens expired — doing full login...")
-
+    TOKEN_DIR.mkdir(exist_ok=True)
     try:
-        client.login()
+        # login() loads saved tokens from TOKEN_DIR if valid;
+        # otherwise authenticates with credentials and saves tokens automatically.
+        client.login(tokenstore=str(TOKEN_DIR))
+        print(f"Authenticated as {client.display_name} (tokens: {TOKEN_DIR})")
+    except GarminConnectTooManyRequestsError as exc:
+        print(f"Rate limited by Garmin: {exc}")
+        print("Wait a few minutes and try again.")
+        sys.exit(1)
     except GarminConnectAuthenticationError as exc:
         print(f"Authentication failed: {exc}")
         sys.exit(1)
 
-    TOKEN_DIR.mkdir(exist_ok=True)
-    client.garth.dump(str(TOKEN_DIR))
-    print(f"Authenticated — tokens saved to {TOKEN_DIR}")
     return client
 
 
@@ -87,7 +88,7 @@ def run_endpoint(label: str, fn, date_str: str) -> bool:
         path = save(label, date_str, data)
         print(f"  OK  {label}")
         print(f"      {summarise(data)}")
-        print(f"      saved → {path.name}")
+        print(f"      saved -> {path.name}")
         return True
     except Exception as exc:
         print(f"  ERR {label}: {exc}")
@@ -113,7 +114,6 @@ def main():
     client = build_client()
     print()
 
-    # Activity date window: same day for activities that ended on target date
     act_start = (target - timedelta(days=1)).isoformat()
     act_end = date_str
 
@@ -135,7 +135,6 @@ def main():
         results[label] = run_endpoint(label, fn, date_str)
         print()
 
-    # Activity FIT file download — use the most recent activity available
     print("Fetching activity FIT file (most recent activity):")
     try:
         recent = client.get_activities(0, 1)
@@ -143,7 +142,7 @@ def main():
             activity_id = recent[0]["activityId"]
             activity_name = recent[0].get("activityName", "unknown")
             activity_date = recent[0].get("startTimeLocal", "")[:10]
-            print(f"  Most recent activity: '{activity_name}' on {activity_date} (id={activity_id})")
+            print(f"  Most recent: '{activity_name}' on {activity_date} (id={activity_id})")
 
             fit_data = client.download_activity(
                 activity_id,
@@ -153,7 +152,7 @@ def main():
             with open(fit_path, "wb") as f:
                 f.write(fit_data)
             size_kb = round(len(fit_data) / 1024, 1)
-            print(f"  OK  activity_fit: {size_kb} KB → {fit_path.name}")
+            print(f"  OK  activity_fit: {size_kb} KB -> {fit_path.name}")
             results["activity_fit"] = True
         else:
             print("  SKIP activity_fit: no activities found")
@@ -162,7 +161,6 @@ def main():
         print(f"  ERR activity_fit: {exc}")
         results["activity_fit"] = False
 
-    # Summary
     ok = sum(1 for v in results.values() if v is True)
     skipped = sum(1 for v in results.values() if v is None)
     failed = sum(1 for v in results.values() if v is False)

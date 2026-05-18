@@ -22,13 +22,14 @@ The practical solution is the **`garminconnect` Python library** (github.com/cyb
 
 | Data Type | Resolution | Available via garminconnect |
 |---|---|---|
-| Heart rate (all-day) | 1-minute intervals | ✓ `get_heart_rates()` |
-| Stress index (0–100) | 3-minute intervals | ✓ `get_stress_data()` |
-| Body battery | 3-minute intervals (full daily curve) | ✓ `get_body_battery()` |
-| SpO2 | Per reading throughout day | ✓ `get_spo2_data()` |
+| Heart rate (all-day) | 2-minute intervals (720/day) | ✓ `get_heart_rates()` |
+| Stress index (0–100) | 3-minute intervals (480/day) | ✓ `get_stress_data()` |
+| Body battery (full daily curve) | 3-minute intervals (480/day) | ✓ `get_stress_data()` — the full body battery timeline is embedded in the stress response (`bodyBatteryValuesArray`); the dedicated `get_body_battery()` endpoint returns only sparse event data (~6 records) |
+| SpO2 | Per reading throughout day; also embedded in sleep response | ✓ `get_spo2_data()` + `get_sleep_data()` |
 | Respiration rate | Per reading throughout day | ✓ `get_respiration_data()` |
-| Sleep stages (deep/light/REM/awake) | Per session | ✓ `get_sleep_data()` |
-| HRV (nightly value + baseline) | One value per night | ✓ `get_hrv_data()` |
+| Sleep (stages + detail) | Per session | ✓ `get_sleep_data()` — includes stage durations, SpO2 during sleep, restless moments, movement data |
+| HRV summary | One record per night | ✓ `get_hrv_data()` — weekly avg, last-night avg, 5-min high, personal baseline range (low/balanced/upper), status |
+| HRV readings | ~85 individual readings/night (~5-min intervals during sleep) | ✓ `get_hrv_data()` — enough data to chart a full nightly HRV curve, not just a single value |
 | Daily wellness summary | One row per day | ✓ `get_stats()` |
 | Activity list | Per activity | ✓ `get_activities_by_date()` |
 | Activity FIT file | Per-second during activity | ✓ `download_activity()` |
@@ -88,12 +89,13 @@ A standalone script (`collector.py`) authenticates with Garmin Connect, fetches 
 
 * **Action:** Build a clean dashboard that renders what the data actually contains, with no algorithmic interpretation.
 * **Implementation:**
-  * **Heart Rate:** Full 24-hour line chart at 1-minute resolution — the actual continuous BPM curve for the day
-  * **Stress:** Full 24-hour area chart at 3-minute resolution — the actual stress index curve
-  * **Body Battery:** Full daily curve at 3-minute resolution — how the battery drains and recovers through the day
-  * **Sleep Stages:** Stacked horizontal bar per night — Deep, Light, REM, Awake durations
+  * **Heart Rate:** Full 24-hour line chart at 2-minute resolution (720 points) — the actual continuous BPM curve for the day including sleep
+  * **Stress:** Full 24-hour area chart at 3-minute resolution (480 points) — the actual stress index curve
+  * **Body Battery:** Full daily drain/recovery curve at 3-minute resolution (480 points) — sourced from the stress endpoint response alongside stress data
+  * **Sleep Stages:** Stacked horizontal bar per night — Deep, Light, REM, Awake durations, with restless moments and SpO2 summary from the same response
   * **SpO2 & Respiration:** Point plots for the day showing actual readings
-  * **HRV Trend:** Daily line chart — one nightly HRV value per day over weeks/months
+  * **HRV Nightly Curve:** ~85-point line chart of HRV readings during the sleep window (~5-minute intervals) — a full shape of the night, not just a single number
+  * **HRV Trend:** Daily summary line over weeks/months — last-night average, weekly average, and personal baseline band for context
   * **Activity HR:** Per-second HR curve for a selected recorded activity (from FIT file)
   * **Steps & Calories:** Daily bar charts
   * All charts use raw data directly from SQLite with no statistical modification

@@ -183,13 +183,13 @@ APScheduler fires at 3 AM daily. The sync window is yesterday (all data for that
 ```
 APScheduler fires at 3 AM
   → sync_service.sync_date(yesterday)
-    → garmin_client.get_heart_rates(date)      → intraday_hr table
-    → garmin_client.get_stress_data(date)      → intraday_stress table
-    → garmin_client.get_body_battery(date)     → intraday_body_battery table
+    → garmin_client.get_heart_rates(date)      → intraday_hr (720 rows, 2-min intervals)
+    → garmin_client.get_stress_data(date)      → intraday_stress (480 rows, 3-min intervals)
+                                               → intraday_body_battery (480 rows, same response)
     → garmin_client.get_spo2_data(date)        → intraday_spo2 table
     → garmin_client.get_respiration_data(date) → intraday_respiration table
-    → garmin_client.get_sleep_data(date)       → sleep_sessions table
-    → garmin_client.get_hrv_data(date)         → hrv_summary table
+    → garmin_client.get_sleep_data(date)       → sleep_sessions (stages + SpO2 + movement)
+    → garmin_client.get_hrv_data(date)         → hrv_summary + hrv_readings (~85 rows/night)
     → garmin_client.get_stats(date)            → daily_wellness table
     → garmin_client.get_activities_by_date()   → activity_sessions table
       → for each new activity:
@@ -218,13 +218,14 @@ All data types below are accessible from the Garmin Connect API via the garminco
 
 | Data Type | Method | Resolution | Notes |
 |---|---|---|---|
-| All-day heart rate | `get_heart_rates()` | 1-minute intervals | Full 24-hour curve including sleep |
-| Stress index | `get_stress_data()` | 3-minute intervals | Full 24-hour curve |
-| Body battery | `get_body_battery()` | 3-minute intervals | Full daily drain/recovery curve |
-| SpO2 | `get_spo2_data()` | Per reading | Continuous overnight + daytime |
+| All-day heart rate | `get_heart_rates()` | 2-minute intervals (720/day) | Full 24-hour curve including sleep |
+| Stress index | `get_stress_data()` | 3-minute intervals (480/day) | Full 24-hour curve |
+| Body battery | `get_stress_data()` | 3-minute intervals (480/day) | **Comes from the stress endpoint**, not `get_body_battery()`. The dedicated body battery endpoint returns only ~6 sparse event records; the full timeline is in `stressValuesArray`'s companion `bodyBatteryValuesArray`. One API call yields both. |
+| SpO2 | `get_spo2_data()` | Per reading | Continuous overnight + daytime; also summarised inside `get_sleep_data()` |
 | Respiration rate | `get_respiration_data()` | Per reading | Continuous throughout day |
-| Sleep stages | `get_sleep_data()` | Per session + stage durations | Deep, Light, REM, Awake |
-| HRV | `get_hrv_data()` | One nightly value | Includes personal baseline range |
+| Sleep stages + detail | `get_sleep_data()` | Per session | Stage durations (Deep/Light/REM/Awake) plus SpO2 during sleep, movement data, restless moments — richer than stage durations alone |
+| HRV summary | `get_hrv_data()` | One record per night | weekly avg, last-night avg, 5-min high, personal baseline range (low/balanced/upper), status (BALANCED / UNBALANCED / etc.), feedback phrase |
+| HRV readings | `get_hrv_data()` | ~85 readings per night (~5-min intervals during sleep) | Individual HRV values throughout the sleep window — enough to chart a nightly HRV curve, not just a single number |
 | Daily wellness | `get_stats()` | One row per day | Steps, calories, resting HR, etc. |
 | Activity list | `get_activities_by_date()` | Per activity | Type, duration, distance, HR |
 | Activity FIT file | `download_activity()` | Per-second | HR, GPS, power, cadence |
@@ -253,12 +254,16 @@ daily_wellness      — user_id, calendar_date,
                       UNIQUE(user_id, calendar_date)
 
 intraday_hr         — user_id, timestamp, bpm
+                      (2-minute intervals; 720 rows per full day)
                       UNIQUE(user_id, timestamp)
 
 intraday_stress     — user_id, timestamp, stress_level
+                      (3-minute intervals; 480 rows per full day)
                       UNIQUE(user_id, timestamp)
 
 intraday_body_battery — user_id, timestamp, battery_level
+                      (3-minute intervals; 480 rows per full day)
+                      (populated from get_stress_data() response, not get_body_battery())
                       UNIQUE(user_id, timestamp)
 
 intraday_spo2       — user_id, timestamp, spo2_pct
@@ -269,12 +274,19 @@ intraday_respiration — user_id, timestamp, breaths_per_min
 
 sleep_sessions      — user_id, session_date, start_time, end_time,
                       deep_mins, light_mins, rem_mins, awake_mins,
-                      sleep_score
+                      sleep_score, restless_moments_count,
+                      spo2_avg, spo2_min
                       UNIQUE(user_id, session_date)
 
-hrv_summary         — user_id, date, hrv_value,
-                      baseline_low, baseline_high, status
+hrv_summary         — user_id, date,
+                      weekly_avg, last_night_avg, last_night_5min_high,
+                      baseline_low_upper, balanced_low, balanced_upper,
+                      status, feedback_phrase
                       UNIQUE(user_id, date)
+
+hrv_readings        — user_id, date, reading_time, hrv_value
+                      (~85 rows per night; individual readings during sleep window)
+                      UNIQUE(user_id, reading_time)
 
 activity_sessions   — user_id, activity_id, start_time,
                       activity_type, duration_secs, distance_meters,
