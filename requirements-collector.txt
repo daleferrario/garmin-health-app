@@ -1,0 +1,4 @@
+# Stage 0 collector dependencies only
+# Install with: pip install -r requirements-collector.txt
+garminconnect
+python-dotenv
