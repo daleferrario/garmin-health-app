@@ -18,6 +18,12 @@ instance/
 # Collector output (raw API responses, may contain health data)
 collector_output/
 
+# Report cache (raw API responses cached for report.py re-runs)
+report_cache/
+
+# Generated health reports (contain personal health data)
+health_report*.md
+
 # OS
 .DS_Store
 Thumbs.db
