@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Head -20)",
+      "PowerShell(gh --version)",
+      "Bash(find /c/Users/dalef -name \".git\" -type d 2>/dev/null | head -5)",
+      "Read(//c/Users/dalef/**)",
+      "Bash(dir /c/Users/dalef/OneDrive/Documents/Software/GolfAnalyticsTest/routes)",
+      "WebSearch",
+      "Bash(gh auth *)",
+      "WebFetch(domain:github.com)",
+      "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" api repos/daleferrario/GolfAnalytics/contents/auth_routes.py --jq '.content' 2>&1)"
+    ]
+  }
+}

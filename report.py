@@ -30,6 +30,7 @@ EMAIL = os.getenv("GARMIN_EMAIL")
 PASSWORD = os.getenv("GARMIN_PASSWORD")
 TOKEN_DIR = Path(".garmin_tokens")
 CACHE_DIR = Path("report_cache")
+DRIVE_FOLDER = os.getenv("GOOGLE_DRIVE_HEALTH_FOLDER")
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +397,7 @@ def main():
     end_date = date.fromisoformat(args.end) if args.end else date.today() - timedelta(days=1)
     start_date = end_date - timedelta(days=args.days - 1)
     date_str = end_date.isoformat().replace("-", ".")
-    output_path = args.output or f"Health_Report_{args.days}_day_view_{date_str}.md"
+    output_path = args.output or f"Garmin_Watch_Health_Data_{args.days}_day_view-{date_str}.md"
 
     print(f"Garmin health report — {start_date} to {end_date} ({args.days} days)")
     print(f"Output: {output_path}\n")
@@ -440,6 +441,15 @@ def main():
     print(f"done.\n")
     print(f"Report written to: {output_path}")
     print(f"({len(report.splitlines())} lines, {len(report):,} characters)")
+
+    if DRIVE_FOLDER:
+        drive_dir = Path(DRIVE_FOLDER)
+        if drive_dir.is_dir():
+            drive_path = drive_dir / Path(output_path).name
+            drive_path.write_text(report, encoding="utf-8")
+            print(f"Report copied to Google Drive: {drive_path}")
+        else:
+            print(f"WARNING: GOOGLE_DRIVE_HEALTH_FOLDER not found: {DRIVE_FOLDER}")
 
 
 if __name__ == "__main__":
