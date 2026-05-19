@@ -23,6 +23,7 @@ report_cache/
 
 # Generated health reports (contain personal health data)
 health_report*.md
+Health_Report*.md
 
 # OS
 .DS_Store

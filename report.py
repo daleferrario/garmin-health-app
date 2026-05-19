@@ -188,36 +188,15 @@ def avg_of(rows: list, key: str) -> float | None:
 
 
 def trend(rows: list, key: str) -> str:
-    """Return a simple trend description over the period."""
+    """Return first-week avg → last-week avg."""
     vals = [(i, r[key]) for i, r in enumerate(rows) if r.get(key) is not None]
     if len(vals) < 7:
         return "insufficient data"
     first_avg = sum(v for _, v in vals[:7]) / 7
     last_avg  = sum(v for _, v in vals[-7:]) / 7
-    delta = last_avg - first_avg
-    if abs(delta) < 1:
-        return "stable"
-    direction = "improving" if delta > 0 else "declining"
-    return f"{direction} ({first_avg:.0f} → {last_avg:.0f})"
-
-
-def hrv_trend(rows: list) -> str:
-    """Higher HRV = better, so 'improving' means rising."""
-    return trend(rows, "hrv_last_night")
-
-
-def rhr_trend(rows: list) -> str:
-    """Lower RHR = better, so invert the label."""
-    vals = [(i, r["resting_hr"]) for i, r in enumerate(rows) if r.get("resting_hr") is not None]
-    if len(vals) < 7:
-        return "insufficient data"
-    first_avg = sum(v for _, v in vals[:7]) / 7
-    last_avg  = sum(v for _, v in vals[-7:]) / 7
-    delta = last_avg - first_avg
-    if abs(delta) < 1:
-        return "stable"
-    direction = "improving" if delta < 0 else "declining"
-    return f"{direction} ({first_avg:.0f} → {last_avg:.0f})"
+    if abs(last_avg - first_avg) < 1:
+        return f"stable ({first_avg:.0f})"
+    return f"{first_avg:.0f} → {last_avg:.0f}"
 
 
 def generate_report(rows: list, activities: list, end_date: date, days: int) -> str:
@@ -240,46 +219,43 @@ def generate_report(rows: list, activities: list, end_date: date, days: int) -> 
         "",
     ]
 
-    # ---- Context note for AI ----
+    # ---- Data dictionary for AI ----
     lines += [
-        "## Note for AI Evaluator",
+        "## Data Dictionary",
         "",
-        "This document contains wearable sensor data for longitudinal health and "
-        "longevity evaluation. All values are recorded continuously by the device "
-        "during normal daily life — not clinic measurements. Interpret accordingly:",
+        "All values are recorded continuously by a Garmin Fenix 7X during normal daily life.",
         "",
-        "- **HRV (Heart Rate Variability):** Nightly average during sleep window. "
-          "Higher = better autonomic function. Track trend and deviation from personal baseline.",
-        "- **Resting HR:** Daily resting value. Lower (within reason) = better cardiovascular fitness.",
-        "- **Sleep stages:** Deep sleep drives cellular repair; REM drives cognitive health. "
-          "Percentages matter as much as absolute minutes.",
-        "- **Sleep SpO2 min:** Values consistently below 90% warrant sleep apnea evaluation.",
-        "- **Body battery at wake:** Garmin's recovery score (0–100) at the moment of waking. "
-          "Reflects overnight recovery quality. Below 50 consistently = under-recovery.",
-        "- **Breathing disruption severity:** NONE / MILD / MODERATE / SEVERE. "
-          "Anything above NONE warrants attention.",
-        "- **Stress qualifier:** Garmin's daily stress classification based on HRV fluctuation patterns.",
+        "- **RHR (Resting Heart Rate):** bpm, daily value",
+        "- **HRV (Heart Rate Variability):** ms, nightly average of ~85 readings taken during the sleep window at ~5-minute intervals; also includes personal baseline range (balancedLow–balancedUpper) and Garmin's status label (BALANCED / UNBALANCED / LOW)",
+        "- **Sleep stages:** Deep, Light, REM, Awake — minutes per night",
+        "- **Sleep SpO2:** blood oxygen saturation (%) during sleep — average and lowest reading",
+        "- **Body battery:** Garmin's 0–100 energy reserve score — value at wake, highest, lowest, end of day, total charged and drained",
+        "- **Stress:** Garmin's 0–100 stress index derived from HRV patterns — daily average, max, and qualifier label",
+        "- **Breathing disruption severity:** Garmin classification of overnight breathing irregularity — NONE / MILD / MODERATE / SEVERE",
+        "- **Waking respiration:** breaths per minute, average during waking hours",
+        "- **Intensity minutes:** Garmin's moderate and vigorous intensity minute counts per day",
         "",
         "---",
         "",
     ]
 
     # ---- 90-Day Summary ----
+    period_label = f"{days}-Day"
     lines += [
         "## Summary Statistics",
         "",
-        f"| Metric | 90-Day Average | Trend |",
-        f"|--------|---------------|-------|",
-        f"| Resting HR | {_val(avg_of(rows, 'resting_hr'), ' bpm')} | {rhr_trend(rows)} |",
-        f"| HRV (last night avg) | {_val(avg_of(rows, 'hrv_last_night'), ' ms')} | {hrv_trend(rows)} |",
-        f"| Total sleep | {_val(avg_of(rows, 'sleep_total_mins'), ' min')} | {trend(rows, 'sleep_total_mins')} |",
-        f"| Deep sleep | {_val(avg_of(rows, 'sleep_deep_mins'), ' min')} | {trend(rows, 'sleep_deep_mins')} |",
-        f"| REM sleep | {_val(avg_of(rows, 'sleep_rem_mins'), ' min')} | {trend(rows, 'sleep_rem_mins')} |",
-        f"| Sleep SpO2 low | {_val(avg_of(rows, 'sleep_spo2_low'), '%')} | — |",
-        f"| Body battery at wake | {_val(avg_of(rows, 'bb_at_wake'), '')} | {trend(rows, 'bb_at_wake')} |",
-        f"| Avg daily stress | {_val(avg_of(rows, 'avg_stress'), '')} | {trend(rows, 'avg_stress')} |",
-        f"| Daily steps | {_val(avg_of(rows, 'steps'), '')} | {trend(rows, 'steps')} |",
-        f"| Waking respiration | {_val(avg_of(rows, 'resp_avg_waking'), ' br/min')} | — |",
+        f"| Metric | {period_label} Average | First 7-day avg → Last 7-day avg |",
+        f"|--------|{'-'*len(period_label+' Average')}|----------------------------------|",
+        f"| Resting HR (bpm) | {_val(avg_of(rows, 'resting_hr'))} | {trend(rows, 'resting_hr')} |",
+        f"| HRV last night (ms) | {_val(avg_of(rows, 'hrv_last_night'))} | {trend(rows, 'hrv_last_night')} |",
+        f"| Total sleep (min) | {_val(avg_of(rows, 'sleep_total_mins'))} | {trend(rows, 'sleep_total_mins')} |",
+        f"| Deep sleep (min) | {_val(avg_of(rows, 'sleep_deep_mins'))} | {trend(rows, 'sleep_deep_mins')} |",
+        f"| REM sleep (min) | {_val(avg_of(rows, 'sleep_rem_mins'))} | {trend(rows, 'sleep_rem_mins')} |",
+        f"| Sleep SpO2 low (%) | {_val(avg_of(rows, 'sleep_spo2_low'))} | {trend(rows, 'sleep_spo2_low')} |",
+        f"| Body battery at wake | {_val(avg_of(rows, 'bb_at_wake'))} | {trend(rows, 'bb_at_wake')} |",
+        f"| Avg daily stress | {_val(avg_of(rows, 'avg_stress'))} | {trend(rows, 'avg_stress')} |",
+        f"| Daily steps | {_val(avg_of(rows, 'steps'))} | {trend(rows, 'steps')} |",
+        f"| Waking respiration (br/min) | {_val(avg_of(rows, 'resp_avg_waking'))} | {trend(rows, 'resp_avg_waking')} |",
         "",
         "---",
         "",
@@ -300,7 +276,7 @@ def generate_report(rows: list, activities: list, end_date: date, days: int) -> 
 
     for r in rows:
         sleep_h = f"{r['sleep_total_mins']//60}h{r['sleep_total_mins']%60:02d}m" if r.get("sleep_total_mins") else "—"
-        bd = (r.get("breathing_disruption") or "—").replace("NONE", "✓").replace("MILD", "MILD").replace("MODERATE", "MOD").replace("SEVERE", "SEV")
+        bd = (r.get("breathing_disruption") or "—").replace("MODERATE", "MOD").replace("SEVERE", "SEV")
         lines.append(
             f"| {r['date']} "
             f"| {_val(r.get('resting_hr'))} "
@@ -394,28 +370,6 @@ def generate_report(rows: list, activities: list, end_date: date, days: int) -> 
 
     lines += ["", "---", ""]
 
-    # ---- Notable Flags ----
-    flags = []
-    for r in rows:
-        d = r["date"]
-        if r.get("sleep_spo2_low") and r["sleep_spo2_low"] < 90:
-            flags.append(f"- **{d}:** Sleep SpO2 dropped to {r['sleep_spo2_low']}% (below 90% threshold)")
-        bd = r.get("breathing_disruption", "NONE")
-        if bd and bd not in ("NONE", None):
-            flags.append(f"- **{d}:** Breathing disruption: {bd}")
-        if r.get("hrv_last_night") and r.get("hrv_baseline_low"):
-            if r["hrv_last_night"] < r["hrv_baseline_low"]:
-                flags.append(f"- **{d}:** HRV {r['hrv_last_night']} ms below personal baseline low ({r['hrv_baseline_low']} ms)")
-        if r.get("bb_at_wake") and r["bb_at_wake"] < 40:
-            flags.append(f"- **{d}:** Body battery at wake only {r['bb_at_wake']} — poor overnight recovery")
-
-    lines += ["## Notable Flags", ""]
-    if flags:
-        lines += flags
-    else:
-        lines.append("No significant flags detected in this period.")
-    lines += ["", "---", ""]
-
     lines += [
         "*Report generated by garmin-health-app report.py*",
         f"*Data cached in report_cache/ — delete cache files to force re-fetch*",
@@ -441,7 +395,8 @@ def main():
 
     end_date = date.fromisoformat(args.end) if args.end else date.today() - timedelta(days=1)
     start_date = end_date - timedelta(days=args.days - 1)
-    output_path = args.output or f"health_report_{end_date}.md"
+    date_str = end_date.isoformat().replace("-", ".")
+    output_path = args.output or f"Health_Report_{args.days}_day_view_{date_str}.md"
 
     print(f"Garmin health report — {start_date} to {end_date} ({args.days} days)")
     print(f"Output: {output_path}\n")
