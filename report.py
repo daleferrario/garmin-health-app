@@ -355,8 +355,8 @@ def generate_report(rows: list, activities: list, end_date: date, days: int) -> 
         "",
         f"Total recorded activities in period: {len(activities)}",
         "",
-        "| Date | Activity | Duration | Avg HR | Max HR | Distance |",
-        "|------|----------|----------|--------|--------|----------|",
+        "| Date | Activity | Duration | Avg HR | Max HR | Distance | Z1 min | Z2 min | Z3 min | Z4 min | Z5 min |",
+        "|------|----------|----------|--------|--------|----------|--------|--------|--------|--------|--------|",
     ]
     for a in sorted(activities, key=lambda x: x.get("startTimeLocal", ""), reverse=True):
         act_date = (a.get("startTimeLocal") or "")[:10]
@@ -367,7 +367,10 @@ def generate_report(rows: list, activities: list, end_date: date, days: int) -> 
         max_hr   = a.get("maxHR") or "—"
         dist_m   = a.get("distance")
         dist_str = f"{dist_m/1000:.1f} km" if dist_m else "—"
-        lines.append(f"| {act_date} | {name} | {dur_str} | {avg_hr} | {max_hr} | {dist_str} |")
+        def zone_min(z):
+            secs = a.get(f"hrTimeInZone_{z}")
+            return f"{round(secs / 60)}" if secs is not None else "—"
+        lines.append(f"| {act_date} | {name} | {dur_str} | {avg_hr} | {max_hr} | {dist_str} | {zone_min(1)} | {zone_min(2)} | {zone_min(3)} | {zone_min(4)} | {zone_min(5)} |")
 
     lines += ["", "---", ""]
 
